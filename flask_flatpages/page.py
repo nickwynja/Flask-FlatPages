@@ -7,7 +7,7 @@ Define flatpage instance.
 
 """
 
-import yaml
+import frontmatter
 
 from werkzeug.utils import cached_property
 
@@ -63,10 +63,8 @@ class Page(object):
     @cached_property
     def meta(self):
         """A dict of metadata parsed as YAML from the header of the file."""
-        meta = yaml.safe_load(self._meta)
-        # YAML documents can be any type but we want a dict
-        # eg. yaml.safe_load('') -> None
-        #     yaml.safe_load('- 1\n- a') -> [1, 'a']
+        fm = frontmatter.loads(self._meta)
+        meta = fm.metadata
         if not meta:
             return {}
         if not isinstance(meta, dict):
