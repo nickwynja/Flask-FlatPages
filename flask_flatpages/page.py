@@ -8,12 +8,10 @@ Define flatpage instance.
 """
 
 import frontmatter
-
 from werkzeug.utils import cached_property
 
 
 class Page(object):
-
     """Simple class to store all necessary information about a flatpage.
 
     Main purpose is to render the page's content with a ``html_renderer``

@@ -9,7 +9,6 @@ Flatpages extension.
 
 import operator
 import os
-
 from inspect import getargspec
 from itertools import takewhile
 
@@ -22,7 +21,6 @@ from .utils import force_unicode, pygmented_markdown
 
 
 class FlatPages(object):
-
     """A collection of :class:`Page` objects."""
 
     #: Default configuration for FlatPages extension
@@ -32,7 +30,10 @@ class FlatPages(object):
         ('encoding', 'utf-8'),
         ('html_renderer', pygmented_markdown),
         ('markdown_extensions', ['codehilite']),
+        ('extension_configs', {}),
         ('auto_reload', 'if debug'),
+        ('case_insensitive', False),
+        ('instance_relative', False)
     )
 
     def __init__(self, app=None, name=None):
@@ -104,7 +105,7 @@ class FlatPages(object):
 
     def init_app(self, app):
         """
-        Used to initialize an application, useful for passing an app later and
+        Use to initialize an application, useful for passing an app later and
         app factory patterns.
 
         :param app: your application
@@ -142,9 +143,16 @@ class FlatPages(object):
         """Full path to the directory where pages are looked for.
 
         This corresponds to the `FLATPAGES_%(name)s_ROOT` config value,
-        interpreted as relative to the app's root directory.
+        interpreted as relative to the app's root directory, or as relative
+        to the app's instance folder if `FLATPAGES_%(name)s_INSTANCE_RELATIVE`
+        is set to `True`.
+
         """
-        root_dir = os.path.join(self.app.root_path, self.config('root'))
+        if self.config('instance_relative'):
+            root_dir = os.path.join(self.app.instance_path,
+                                    self.config('root'))
+        else:
+            root_dir = os.path.join(self.app.root_path, self.config('root'))
         return force_unicode(root_dir)
 
     def _conditional_auto_reset(self):
@@ -205,6 +213,8 @@ class FlatPages(object):
                                               for item in extension
                                               if name.endswith(item)][0]
                     path = u'/'.join(path_prefix + (name_without_extension, ))
+                    if self.config('case_insensitive'):
+                        path = path.lower()
                     yield (path, full_name)
 
         # Read extension from config
@@ -226,9 +236,14 @@ class FlatPages(object):
                 'a sequence, got {0} instead: {1}'.
                 format(type(extension).__name__, extension)
             )
-
-        return dict([(path, self._load_file(path, full_name))
-                     for path, full_name in _walker()])
+        pages = {}
+        for path, full_name in _walker():
+            if path in pages:
+                raise ValueError(
+                    'Multiple pages found which correspond to the same path. '
+                    'This error can arise when using multiple extensions.')
+            pages[path] = self._load_file(path, full_name)
+        return pages
 
     def _parse(self, content, path):
         """Parse a flatpage file, i.e. read and parse its meta data and body.
@@ -279,7 +294,7 @@ class FlatPages(object):
 
         """
         def wrapper(page):
-            """Simple wrapper to inspect the HTML renderer function and pass
+            """Use to wrap HTML renderer function and pass
             arguments to it based on the number of arguments.
 
             * 1 argument -> page body

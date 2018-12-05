@@ -18,7 +18,7 @@ import unittest
 from contextlib import contextmanager
 
 from flask import Flask
-from flask.ext.flatpages import FlatPages, compat, pygments_style_defs
+from flask_flatpages import FlatPages, compat, pygments_style_defs
 from werkzeug.exceptions import NotFound
 
 from .test_temp_directory import temp_directory
@@ -170,6 +170,46 @@ class TestFlatPages(unittest.TestCase):
     def test_extension_tuple(self):
         self.test_extension_sequence(('.html', '.txt'))
 
+    def test_catch_conflicting_paths(self):
+        app = Flask(__name__)
+        app.config['FLATPAGES_EXTENSION'] = ['.html', '.txt']
+        with temp_pages(app) as pages:
+            original_file = os.path.join(pages.root, 'hello.html')
+            target_file = os.path.join(pages.root, 'hello.txt')
+            shutil.copyfile(original_file, target_file)
+            pages.reload()
+            self.assertRaises(ValueError, pages.get, 'hello')
+
+    def test_case_insensitive(self):
+        app = Flask(__name__)
+        app.config['FLATPAGES_EXTENSION'] = ['.html', '.txt']
+        app.config['FLATPAGES_CASE_INSENSITIVE'] = True
+        with temp_pages(app) as pages:
+            original_file = os.path.join(pages.root, 'hello.html')
+            upper_file = os.path.join(pages.root, 'Hello.html')
+            txt_file = os.path.join(pages.root, 'hello.txt')
+            print(original_file)
+            print(upper_file)
+            shutil.move(original_file, upper_file)
+            print(os.listdir(pages.root))
+            pages.reload()
+            self.assertEqual(
+                set(page.path for page in pages),
+                set(['codehilite',
+                     'extra',
+                     'foo',
+                     'foo/42/not_a_page',
+                     'foo/bar',
+                     'foo/lorem/ipsum',
+                     'headerid',
+                     'hello',
+                     'not_a_page',
+                     'toc'])
+            )
+            shutil.copyfile(upper_file, txt_file)
+            pages.reload()
+            self.assertRaises(ValueError, pages.get, 'hello')
+
     def test_get(self):
         pages = FlatPages(Flask(__name__))
         self.assertEqual(pages.get('foo/bar').path, 'foo/bar')
@@ -217,6 +257,17 @@ class TestFlatPages(unittest.TestCase):
         foo = pages.get('foo')
         self.assertEqual(foo.body, 'Foo *bar*\n')
         self.assertEqual(foo.html, '<p>Foo <em>bar</em></p>')
+
+    def test_instance_relative(self):
+        with temp_directory() as temp:
+            source = os.path.join(os.path.dirname(__file__), 'pages')
+            dest = os.path.join(temp, 'instance', 'pages')
+            shutil.copytree(source, dest)
+            app = Flask(__name__, instance_path=os.path.join(temp, 'instance'))
+            app.config['FLATPAGES_INSTANCE_RELATIVE'] = True
+            pages = FlatPages(app)
+            bar = pages.get('foo/bar')
+            self.assertTrue(bar is not None)
 
     def test_multiple_instance(self):
         """
